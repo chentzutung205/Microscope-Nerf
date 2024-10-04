@@ -318,6 +318,7 @@ class Cameras(TensorDataclass):
             image_coords = torch.stack(image_coords, dim=-1) + pixel_offset  # stored as (y, x) coordinates
         return image_coords
 
+
     def generate_rays(
         self,
         camera_indices: Union[Int[Tensor, "*num_rays num_cameras_batch_dims"], int],
