@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from nerfstudio.cameras.cameras import Cameras
+from nerfstudio.cameras.cameras import Cameras, CameraType
 from nerfstudio.models.base_model import Model
 from nerfstudio.data.scene_box import SceneBox
 from nerfstudio.utils.eval_utils import eval_setup
@@ -11,16 +11,23 @@ import os
 from pathlib import Path
 
 """
-TODO: modify config_path and save_dir
+Parameters:
+config_path
+save_dir
+num_cameras
+radius
+height, weight (image dimensions)
 """
 
-# Setup the entire pipeline and load the NeRF model from a config file
+# Setup the entire rendering pipeline and load the NeRF model from a config file
 def load_nerf_model(config_path):
     config_path = Path(config_path)
     _, pipeline, _, _ = eval_setup(config_path)
     return pipeline
 
-# Create a set of viewpoints on a sphere that can be used as camera locations for rendering the NeRF model
+
+# Create a set of viewpoints on a sphere that can be used as camera positions for rendering the NeRF model
+# Generate 'num_points' uniformly distributed points on the surface of a sphere with a specified 'radius'
 def generate_sphere_points(num_points, radius=1):
     phi = np.random.uniform(0, np.pi, num_points)
     theta = np.random.uniform(0, 2*np.pi, num_points)
@@ -32,6 +39,7 @@ def generate_sphere_points(num_points, radius=1):
     
     return np.column_stack((x, y, z))
 
+
 # Visualize the camera positions by creating a 3D scatter plot showing where the camera positions are located in space
 def plot_sphere_points(points):
     fig = plt.figure()
@@ -41,9 +49,10 @@ def plot_sphere_points(points):
     ax.set_ylabel('Y')
     ax.set_zlabel('Z')
     plt.title(f"Camera Positions in 3D Space")
-    plt.show()    
+    plt.show()
 
-# Create a camera-to-world matrix
+
+# Construct a camera-to-world (c2w) matrix
 # 4x4 transformation matrix that represents the camera's position and orientation in world space
 # position: 3D coordinates of the camera in world space
 # look_at: The point the camera is looking at
@@ -53,29 +62,26 @@ def create_camera_to_world(position, look_at=[0, 0, 0], up=[0, 1, 0]):
     right = np.cross(forward, up)
     right = right / np.linalg.norm(right)
     up = np.cross(right, forward)
-    
     cam_to_world = np.eye(4)
     cam_to_world[:3, 0] = right
     cam_to_world[:3, 1] = up
     cam_to_world[:3, 2] = -forward
     cam_to_world[:3, 3] = position
-    return cam_to_world
+    return cam_to_world[:3, :]
+
 
 # Render an image using the NeRF model
-def render_image(pipeline, camera_to_world, height, width):
-
-    # camera_to_world_tensor = torch.tensor(camera_to_world).unsqueeze(0)  # Shape will be (1, 4, 4)
-    # print("camera_to_world shape:", camera_to_world_tensor.shape)  # Should now print (1, 4, 4)
-
-
+def render_image(pipeline, camera_to_world, intrinsics, height, width):
     camera = Cameras(
-        camera_to_worlds=torch.tensor(camera_to_world).unsqueeze(0).float(),
-        fx=float(width),  # Focal lengths in pixels
-        fy=float(width),  # Focal lengths in pixels
-        cx=float(width) / 2,  # Principal point (usually the image center)
-        cy=float(height) / 2,  # Principal point (usually the image center)
-        height=int(height),  # Convert height to int
-        width=int(width),    # Convert width to int
+        camera_to_worlds = camera_to_world.float(),
+        # camera_to_worlds=torch.tensor(camera_to_world).unsqueeze(0).float(),
+        fx=intrinsics['fx'],  # Focal lengths in pixels
+        fy=intrinsics['fy'],  # Focal lengths in pixels
+        cx=intrinsics['cx'],  # Principal point (usually the image center)
+        cy=intrinsics['cy'],  # Principal point (usually the image center)
+        height=torch.tensor([height], dtype=torch.int64),
+        width=torch.tensor([width], dtype=torch.int64),
+        camera_type=CameraType.PERSPECTIVE.value  # Change if using different camera types
     )
     
     # Ray generation (based on the camera parameters provided)
@@ -84,55 +90,54 @@ def render_image(pipeline, camera_to_world, height, width):
 
     # Extract the color information from rendered results
     rgb = outputs["rgb"].reshape(height, width, 3)
-    # return outputs
+
     return rgb.cpu().numpy()
 
+
 def main():
+    # Load the NeRF model
     config_path = "/home/tchen604/nerfstudio/outputs/poster/nerfacto/2024-09-28_153540/config.yml"
     pipeline = load_nerf_model(config_path)
     
-    num_cameras = 50
-    radius = 2
-    height, width = 800, 800  # Output image dimensions
-    # Convert to float
-    # height, width = float(height), float(width)
-    
     # Generate and plot camera positions
+    num_cameras = 5
+    radius = 1
     camera_positions = generate_sphere_points(num_cameras, radius)
     plot_sphere_points(camera_positions)
+
+    height, width = 1080, 1920  # Output image dimensions
 
     save_dir = "/home/tchen604/nerfstudio/outputs/poster/nerfacto/2024-09-28_153540/nerfscope_save"
     os.makedirs(save_dir, exist_ok=True)
 
-    # Prepare a tensor to hold all camera_to_world matrices
-    camera_to_worlds = []
+    # Define intrinsic parameters
+    intrinsic_params = {
+        'fx': torch.tensor([480.6130]),
+        'fy': torch.tensor([481.5445]),
+        'cx': torch.tensor([324.1875]),
+        'cy': torch.tensor([210.0625]),
+    }
     
     # Use the camera positions for rendering
-    # for i, position in enumerate(camera_positions):
-    for position in camera_positions:
+    camera_to_worlds = []
+    for i, position in enumerate(camera_positions):
         camera_to_world = create_camera_to_world(position)
 
-        # Convert to a tensor
+        # Convert to tensor if it's a numpy array
         if isinstance(camera_to_world, np.ndarray):
             camera_to_world = torch.tensor(camera_to_world, dtype=torch.float32)
-
+        
         camera_to_worlds.append(camera_to_world)
+    
+    # Stack all [3, 4] matrices into a tensor of shape (num_cameras, 3, 4)
+    camera_to_worlds = torch.stack(camera_to_worlds)  # Shape: (num_cameras, 3, 4)
 
-    # Convert to a tensor and add batch dimension
-    camera_to_worlds = torch.stack(camera_to_worlds)  # Shape should now be (num_cameras, 4, 4)
-
-
-        # Ensure it's a tensor
-        # if not isinstance(camera_to_world, torch.Tensor):
-        #     camera_to_world = torch.tensor(camera_to_world, dtype=torch.float32)
-    num_rays = 4096  # Set this to your actual number of rays
     for i in range(num_cameras):
+        camera_to_world = camera_to_worlds[i].unsqueeze(0)
+
+        rgb = render_image(pipeline, camera_to_world, intrinsic_params, height, width)
         
-        # camera_to_world_batch = camera_to_worlds[i].unsqueeze(0).expand(num_rays, -1, -1)  # (num_rays, 4, 4)
-        # rgb = render_image(pipeline, camera_to_world_batch, height, width)
-        rgb = render_image(pipeline, camera_to_worlds, height, width)
-        
-        plt.figure(figsize=(10, 10))
+        plt.figure(figsize=(20, 20))
         plt.imshow(rgb)
         plt.axis('off')
         plt.title(f"Render from camera position {i+1}")
@@ -141,6 +146,7 @@ def main():
         
         # Provide progress feedback
         CONSOLE.print(f"Rendered image {i+1}/{num_cameras}")
+
 
 if __name__ == "__main__":
     main()
