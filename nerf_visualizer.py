@@ -10,14 +10,17 @@ import matplotlib.pyplot as plt
 import os
 from pathlib import Path
 
+
 """
-Parameters:
+Change if needed:
 config_path
 save_dir
 num_cameras
 radius
 height, weight (image dimensions)
+intrinsic parameters of camera
 """
+
 
 # Setup the entire rendering pipeline and load the NeRF model from a config file
 def load_nerf_model(config_path):
@@ -95,21 +98,14 @@ def render_image(pipeline, camera_to_world, intrinsics, height, width):
 
 
 def main():
-    # Load the NeRF model
+
+    # Modify if needed
     config_path = "/home/tchen604/nerfstudio/outputs/poster/nerfacto/2024-09-28_153540/config.yml"
-    pipeline = load_nerf_model(config_path)
-    
-    # Generate and plot camera positions
+    save_dir = "/home/tchen604/nerfstudio/outputs/poster/nerfacto/2024-09-28_153540/nerfscope_save"
     num_cameras = 5
     radius = 1
-    camera_positions = generate_sphere_points(num_cameras, radius)
-    plot_sphere_points(camera_positions)
-
     height, width = 1080, 1920  # Output image dimensions
-
-    save_dir = "/home/tchen604/nerfstudio/outputs/poster/nerfacto/2024-09-28_153540/nerfscope_save"
-    os.makedirs(save_dir, exist_ok=True)
-
+    
     # Define intrinsic parameters
     intrinsic_params = {
         'fx': torch.tensor([480.6130]),
@@ -118,6 +114,15 @@ def main():
         'cy': torch.tensor([210.0625]),
     }
     
+    # Load the NeRF model
+    pipeline = load_nerf_model(config_path)
+    
+    # Generate and plot camera positions
+    camera_positions = generate_sphere_points(num_cameras, radius)
+    plot_sphere_points(camera_positions)
+    
+    os.makedirs(save_dir, exist_ok=True)
+
     # Use the camera positions for rendering
     camera_to_worlds = []
     for i, position in enumerate(camera_positions):
@@ -134,7 +139,6 @@ def main():
 
     for i in range(num_cameras):
         camera_to_world = camera_to_worlds[i].unsqueeze(0)
-
         rgb = render_image(pipeline, camera_to_world, intrinsic_params, height, width)
         
         plt.figure(figsize=(20, 20))
