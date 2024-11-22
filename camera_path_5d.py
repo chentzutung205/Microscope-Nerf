@@ -1,0 +1,147 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
+import csv
+
+
+def generate_upper_hemisphere_path_with_orientation(radius=1.0, num_points=100):
+    """
+    Generate 5D points (3D position + 2D orientation) along the upper hemisphere of a sphere.
+
+    Parameters:
+        radius (float): Radius of the sphere.
+        num_points (int): Number of points along the path.
+
+    Returns:
+        np.ndarray: Array of 5D points [x, y, z, pitch, yaw].
+    """
+
+    # Generate points evenly distributed along the upper hemisphere
+    theta = np.linspace(-np.pi / 2, np.pi / 2, num_points)  # Elevation angles
+    phi = 0                                                 # Azimuthal angles
+
+    # Convert spherical to Cartesian coordinates
+    x = radius * np.sin(theta) * np.cos(phi)
+    y = radius * np.sin(theta) * np.sin(phi)
+    z = radius * np.cos(theta)
+
+    # Calculate orientation (pitch, yaw)
+    pitch = np.arctan2(z, np.sqrt(x**2 + y**2))  # Elevation angle
+    yaw = np.arctan2(y, x)                       # Azimuthal angle
+
+    # Combine position and orientation into 5D points
+    points = np.column_stack((x, y, z, pitch, yaw))
+
+    return points
+
+
+def visualize_sphere_with_path(radius=1.0, path_points=None):
+    """
+    Visualize the sphere, path, and points along the upper hemisphere.
+
+    Parameters:
+        radius (float): Radius of the sphere.
+        path_points (np.ndarray): Array of 5D points along the path.
+    """
+
+    # Create the sphere
+    phi = np.linspace(0, 2 * np.pi, 30)
+    theta = np.linspace(0, np.pi, 30)
+    phi, theta = np.meshgrid(phi, theta)
+    x = radius * np.sin(theta) * np.cos(phi)
+    y = radius * np.sin(theta) * np.sin(phi)
+    z = radius * np.cos(theta)
+    point = np.array([x, y, z])
+    
+    # Plot the sphere
+    fig = plt.figure(figsize=(10, 10))
+    ax = fig.add_subplot(111, projection='3d')
+    ax.plot_surface(x, y, z, color='white', alpha=0.3, edgecolor='gray')
+    ax.scatter(0, 0, 0, color='black', s=20, label="Center (Object)")
+
+    # Plot the path
+    if path_points is not None:
+        path_x, path_y, path_z, pitch, yaw = path_points.T
+        ax.scatter(path_x, path_y, path_z, color='red', s=20, label="Path Points")
+        ax.plot(path_x, path_y, path_z, color='blue', label="Path Trajectory")
+
+        # Visualize axes at the first point in the path
+        for i in range(len(path_points)):
+            point = np.array([path_x[i], path_y[i], path_z[i]])
+            norm = np.linalg.norm(point)
+
+            # Normalize the position vector (local z-axis points toward center)
+            local_z_axis = -point / norm
+
+            # Local x-axis (tangential to azimuthal direction)
+            tangent_azimuth = np.array([-np.sin(yaw[i]), np.cos(yaw[i]), 0])
+            local_x_axis = tangent_azimuth / np.linalg.norm(tangent_azimuth)
+
+            # Local y-axis (orthogonal to x-axis and z-axis)
+            local_y_axis = np.cross(local_z_axis, local_x_axis)
+            local_y_axis /= np.linalg.norm(local_y_axis)
+
+            # Plot local axes at this point
+            ax.quiver(
+                point[0], point[1], point[2],
+                local_x_axis[0], local_x_axis[1], local_x_axis[2],
+                color='blue', label="Local X-axis" if i == 0 else ""
+            )
+
+            ax.quiver(
+                point[0], point[1], point[2],
+                local_y_axis[0], local_y_axis[1], local_y_axis[2],
+                color='green', label="Local Y-axis" if i == 0 else ""
+            )
+
+            ax.quiver(
+                point[0], point[1], point[2],
+                local_z_axis[0], local_z_axis[1], local_z_axis[2],
+                color='purple', label="Local Z-axis" if i == 0 else ""
+            )
+
+    # Plot global center axes
+    ax.quiver(0, 0, 0, 1, 0, 0, color='black', label="Global X-axis")
+    ax.quiver(0, 0, 0, 0, 1, 0, color='black', linestyle='dashed', label="Global Y-axis")
+    ax.quiver(0, 0, 0, 0, 0, 1, color='black', linestyle='dotted', label="Global Z-axis")
+
+    # Labels and legend
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_zlabel('Z')
+    ax.set_title("Upper Hemisphere Path")
+    ax.legend()
+    plt.show()
+
+
+def save_pos_to_csv(path_points, filename="path_points.csv"):
+    """
+    Save 5D path information (x, y, z, pitch, yaw) to a CSV file using csv module.
+
+    Parameters:
+        path_points (np.ndarray): Array of 5D points (x, y, z, pitch, yaw).
+        filename (str): Name of the CSV file to save.
+    """
+
+    # Open the file in write mode
+    with open(filename, mode='w', newline='') as file:
+        writer = csv.writer(file)
+
+        # Write the header
+        writer.writerow(["x", "y", "z", "pitch", "yaw"])
+
+        # Write the data rows
+        writer.writerows(path_points)
+
+    print(f"5D path information saved to {filename}")
+
+
+# Generate path points with position and orientation
+radius = 2.0
+num_points = 11
+path_points = generate_upper_hemisphere_path_with_orientation(radius, num_points)
+
+# Visualize the sphere and path
+visualize_sphere_with_path(radius, path_points)
+
+save_pos_to_csv(path_points)
