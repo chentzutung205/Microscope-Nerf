@@ -102,7 +102,7 @@ def main():
     # Modify if needed
     config_path = "/home/tchen604/nerfstudio/outputs/poster/nerfacto/2024-09-28_153540/config.yml"
     save_dir = "/home/tchen604/nerfstudio/outputs/poster/nerfacto/2024-09-28_153540/nerfscope_save"
-    num_cameras = 5
+    num_cameras = 50
     radius = 1
     height, width = 1080, 1920  # Output image dimensions
     
