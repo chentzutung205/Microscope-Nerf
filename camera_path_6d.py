@@ -4,20 +4,21 @@ from mpl_toolkits.mplot3d import Axes3D
 import csv
 
 
-def generate_upper_hemisphere_path_with_orientation(radius=1.0, num_points=100):
+def generate_upper_hemisphere_path_with_orientation(radius=1.0, num_points=10):
     """
-    Generate 5D points (3D position + 2D orientation) along the upper hemisphere of a sphere.
+    Generate 6D points (3D position + 3D orientation) along the upper hemisphere of a sphere.
 
     Parameters:
         radius (float): Radius of the sphere.
         num_points (int): Number of points along the path.
 
     Returns:
-        np.ndarray: Array of 5D points [x, y, z, pitch, yaw].
+        np.ndarray: Array of 6D points [x, y, z, roll, pitch, yaw].
     """
 
     # Generate points evenly distributed along the upper hemisphere
     theta = np.linspace(-np.pi / 2, np.pi / 2, num_points)  # Elevation angles
+    # phi = np.linspace(0, 2 * np.pi, num_points)
     phi = 0                                                 # Azimuthal angles
 
     # Convert spherical to Cartesian coordinates
@@ -25,12 +26,13 @@ def generate_upper_hemisphere_path_with_orientation(radius=1.0, num_points=100):
     y = radius * np.sin(theta) * np.sin(phi)
     z = radius * np.cos(theta)
 
-    # Calculate orientation (pitch, yaw)
-    pitch = np.arctan2(z, np.sqrt(x**2 + y**2))  # Elevation angle
-    yaw = np.arctan2(y, x)                       # Azimuthal angle
+    # Calculate orientation (roll, pitch, yaw)
+    roll = np.zeros(num_points)                  # Rotation about the X-axis => This assumes there is no rotation about the local X-axis
+    pitch = np.arctan2(z, np.sqrt(x**2 + y**2))  # Elevation angle (Rotation about the Y-axis)
+    yaw = np.arctan2(y, x)                       # Azimuthal angle (Rotation about the Z-axis)
 
-    # Combine position and orientation into 5D points
-    points = np.column_stack((x, y, z, pitch, yaw))
+    # Combine position and orientation into 6D points
+    points = np.column_stack((x, y, z, roll, pitch, yaw))
 
     return points
 
@@ -51,9 +53,8 @@ def visualize_sphere_with_path(radius=1.0, path_points=None):
     x = radius * np.sin(theta) * np.cos(phi)
     y = radius * np.sin(theta) * np.sin(phi)
     z = radius * np.cos(theta)
-    point = np.array([x, y, z])
     
-    # Plot the sphere
+    # Plot the sphere and the center
     fig = plt.figure(figsize=(10, 10))
     ax = fig.add_subplot(111, projection='3d')
     ax.plot_surface(x, y, z, color='white', alpha=0.3, edgecolor='gray')
@@ -61,11 +62,14 @@ def visualize_sphere_with_path(radius=1.0, path_points=None):
 
     # Plot the path
     if path_points is not None:
-        path_x, path_y, path_z, pitch, yaw = path_points.T
+        path_x, path_y, path_z, roll, pitch, yaw = path_points.T
         ax.scatter(path_x, path_y, path_z, color='red', s=20, label="Path Points")
-        ax.plot(path_x, path_y, path_z, color='blue', label="Path Trajectory")
+        ax.plot(path_x, path_y, path_z, color='red', label="Path Trajectory")
 
-        # Visualize axes at the first point in the path
+        # Initialize rolling frame
+        prev_x_axis = np.array([0, 1, 0])  # Initial reference x-axis
+
+        # Visualize axes at each point
         for i in range(len(path_points)):
             point = np.array([path_x[i], path_y[i], path_z[i]])
             norm = np.linalg.norm(point)
@@ -76,6 +80,11 @@ def visualize_sphere_with_path(radius=1.0, path_points=None):
             # Local x-axis (tangential to azimuthal direction)
             tangent_azimuth = np.array([-np.sin(yaw[i]), np.cos(yaw[i]), 0])
             local_x_axis = tangent_azimuth / np.linalg.norm(tangent_azimuth)
+            if np.dot(local_x_axis, prev_x_axis) < 0:  # Check for a flip
+                local_x_axis = -local_x_axis
+
+            # Update rolling reference
+            prev_x_axis = local_x_axis
 
             # Local y-axis (orthogonal to x-axis and z-axis)
             local_y_axis = np.cross(local_z_axis, local_x_axis)
@@ -87,13 +96,11 @@ def visualize_sphere_with_path(radius=1.0, path_points=None):
                 local_x_axis[0], local_x_axis[1], local_x_axis[2],
                 color='blue', label="Local X-axis" if i == 0 else ""
             )
-
             ax.quiver(
                 point[0], point[1], point[2],
                 local_y_axis[0], local_y_axis[1], local_y_axis[2],
                 color='green', label="Local Y-axis" if i == 0 else ""
             )
-
             ax.quiver(
                 point[0], point[1], point[2],
                 local_z_axis[0], local_z_axis[1], local_z_axis[2],
@@ -116,10 +123,10 @@ def visualize_sphere_with_path(radius=1.0, path_points=None):
 
 def save_pos_to_csv(path_points, filename="path_points.csv"):
     """
-    Save 5D path information (x, y, z, pitch, yaw) to a CSV file using csv module.
+    Save 6D path information (x, y, z, roll, pitch, yaw) to a CSV file using csv module.
 
     Parameters:
-        path_points (np.ndarray): Array of 5D points (x, y, z, pitch, yaw).
+        path_points (np.ndarray): Array of 6D points (x, y, z, roll, pitch, yaw).
         filename (str): Name of the CSV file to save.
     """
 
@@ -128,17 +135,17 @@ def save_pos_to_csv(path_points, filename="path_points.csv"):
         writer = csv.writer(file)
 
         # Write the header
-        writer.writerow(["x", "y", "z", "pitch", "yaw"])
+        writer.writerow(["x", "y", "z", "roll", "pitch", "yaw"])
 
         # Write the data rows
         writer.writerows(path_points)
 
-    print(f"5D path information saved to {filename}")
+    print(f"6D path information saved to {filename}")
 
 
 # Generate path points with position and orientation
 radius = 2.0
-num_points = 11
+num_points = 13
 path_points = generate_upper_hemisphere_path_with_orientation(radius, num_points)
 
 # Visualize the sphere and path
