@@ -18,7 +18,7 @@ def generate_upper_hemisphere_path_with_orientation(radius=1.0, num_points=10):
 
     # Generate points evenly distributed along the upper hemisphere
     theta = np.linspace(-np.pi / 2, np.pi / 2, num_points)  # Elevation angles
-    # phi = np.linspace(0, 2 * np.pi, num_points)
+    # phi = np.linspace(0, 2 * np.pi, num_points)           # Azimuthal angles
     phi = 0                                                 # Azimuthal angles
 
     # Convert spherical to Cartesian coordinates
@@ -80,6 +80,7 @@ def visualize_sphere_with_path(radius=1.0, path_points=None):
             # Local x-axis (tangential to azimuthal direction)
             tangent_azimuth = np.array([-np.sin(yaw[i]), np.cos(yaw[i]), 0])
             local_x_axis = tangent_azimuth / np.linalg.norm(tangent_azimuth)
+
             if np.dot(local_x_axis, prev_x_axis) < 0:  # Check for a flip
                 local_x_axis = -local_x_axis
 
@@ -89,6 +90,14 @@ def visualize_sphere_with_path(radius=1.0, path_points=None):
             # Local y-axis (orthogonal to x-axis and z-axis)
             local_y_axis = np.cross(local_z_axis, local_x_axis)
             local_y_axis /= np.linalg.norm(local_y_axis)
+
+            print(f"point{i}: ")
+            print("position: ", point)
+            print("orientation (x): ", local_x_axis)
+            print("orientation (y): ", local_y_axis)
+            print("orientation (z): ", local_z_axis)
+            print()
+
 
             # Plot local axes at this point
             ax.quiver(
