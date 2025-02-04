@@ -17,23 +17,21 @@ def generate_upper_hemisphere_path_with_orientation(radius=1.0, num_points=10):
     """
 
     # Generate points evenly distributed along the upper hemisphere
-    theta = np.linspace(-np.pi / 2, np.pi / 2, num_points)  # Elevation angles
+    theta = np.linspace(-np.pi / 2, np.pi / 2, num_points)  # Elevation angles (Rotation about the Y-axis)
     # phi = np.linspace(0, 2 * np.pi, num_points)           # Azimuthal angles
-    phi = 0                                                 # Azimuthal angles
+    phi = 0                                                 # Azimuthal angles (Rotation about the Z-axis)
 
     # Convert spherical to Cartesian coordinates
     x = radius * np.sin(theta) * np.cos(phi)
     y = radius * np.sin(theta) * np.sin(phi)
     z = radius * np.cos(theta)
 
-    # Calculate orientation (roll, pitch, yaw)
-    roll = np.zeros(num_points)                  # Rotation about the X-axis => This assumes there is no rotation about the local X-axis
-    pitch = np.arctan2(z, np.sqrt(x**2 + y**2))  # Elevation angle (Rotation about the Y-axis)
-    yaw = np.arctan2(y, x)                       # Azimuthal angle (Rotation about the Z-axis)
+    # Calculate global orientation (roll, pitch, yaw)
+    # roll = np.zeros(num_points)                  # Rotation about the X-axis => This assumes there is no rotation about the local X-axis
+    # pitch = np.arctan2(z, np.sqrt(x**2 + y**2))  # Elevation angle 
+    yaw = np.arctan2(y, x)                       # Azimuthal angle 
 
-    # Combine position and orientation into 6D points
-    points = np.column_stack((x, y, z, roll, pitch, yaw))
-
+    points = np.column_stack((x, y, z, yaw))
     return points
 
 
@@ -46,6 +44,7 @@ def visualize_sphere_with_path(radius=1.0, path_points=None):
         path_points (np.ndarray): Array of 5D points along the path.
     """
 
+
     # Create the sphere
     phi = np.linspace(0, 2 * np.pi, 30)
     theta = np.linspace(0, np.pi, 30)
@@ -54,15 +53,17 @@ def visualize_sphere_with_path(radius=1.0, path_points=None):
     y = radius * np.sin(theta) * np.sin(phi)
     z = radius * np.cos(theta)
     
+
     # Plot the sphere and the center
     fig = plt.figure(figsize=(10, 10))
     ax = fig.add_subplot(111, projection='3d')
     ax.plot_surface(x, y, z, color='white', alpha=0.3, edgecolor='gray')
     ax.scatter(0, 0, 0, color='black', s=20, label="Center (Object)")
 
+
     # Plot the path
     if path_points is not None:
-        path_x, path_y, path_z, roll, pitch, yaw = path_points.T
+        path_x, path_y, path_z, yaw = path_points.T
         ax.scatter(path_x, path_y, path_z, color='red', s=20, label="Path Points")
         ax.plot(path_x, path_y, path_z, color='red', label="Path Trajectory")
 
@@ -91,11 +92,12 @@ def visualize_sphere_with_path(radius=1.0, path_points=None):
             local_y_axis = np.cross(local_z_axis, local_x_axis)
             local_y_axis /= np.linalg.norm(local_y_axis)
 
+
             print(f"point{i}: ")
-            print("position: ", point)
-            print("orientation (x): ", local_x_axis)
-            print("orientation (y): ", local_y_axis)
-            print("orientation (z): ", local_z_axis)
+            print("global position: ", point)
+            print("local orientation (x): ", local_x_axis)
+            print("local orientation (y): ", local_y_axis)
+            print("local orientation (z): ", local_z_axis)
             print()
 
 
@@ -116,6 +118,7 @@ def visualize_sphere_with_path(radius=1.0, path_points=None):
                 color='purple', label="Local Z-axis" if i == 0 else ""
             )
 
+
     # Plot global center axes
     ax.quiver(0, 0, 0, 1, 0, 0, color='black', label="Global X-axis")
     ax.quiver(0, 0, 0, 0, 1, 0, color='black', linestyle='dashed', label="Global Y-axis")
@@ -130,28 +133,6 @@ def visualize_sphere_with_path(radius=1.0, path_points=None):
     plt.show()
 
 
-def save_pos_to_csv(path_points, filename="path_points.csv"):
-    """
-    Save 6D path information (x, y, z, roll, pitch, yaw) to a CSV file using csv module.
-
-    Parameters:
-        path_points (np.ndarray): Array of 6D points (x, y, z, roll, pitch, yaw).
-        filename (str): Name of the CSV file to save.
-    """
-
-    # Open the file in write mode
-    with open(filename, mode='w', newline='') as file:
-        writer = csv.writer(file)
-
-        # Write the header
-        writer.writerow(["x", "y", "z", "roll", "pitch", "yaw"])
-
-        # Write the data rows
-        writer.writerows(path_points)
-
-    print(f"6D path information saved to {filename}")
-
-
 # Generate path points with position and orientation
 radius = 2.0
 num_points = 13
@@ -159,5 +140,3 @@ path_points = generate_upper_hemisphere_path_with_orientation(radius, num_points
 
 # Visualize the sphere and path
 visualize_sphere_with_path(radius, path_points)
-
-save_pos_to_csv(path_points)
